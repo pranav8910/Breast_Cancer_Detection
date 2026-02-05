@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Upload Mammogram - Breast Cancer Detection</title>
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='css/style.css') }}"
+    />
+  </head>
+  <body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+      <div class="container">
+        <a class="navbar-brand" href="/">
+          <strong>🔬 Breast Cancer Detection System</strong>
+        </a>
+        <button
+          class="navbar-toggler"
+          type="button"
+          data-bs-toggle="collapse"
+          data-bs-target="#navbarNav"
+        >
+          <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarNav">
+          <ul class="navbar-nav ms-auto">
+            <li class="nav-item">
+              <a class="nav-link" href="/">Home</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link active" href="/upload">Upload Image</a>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </nav>
+
+    <!-- Upload Section -->
+    <div class="container my-5">
+      <div class="row justify-content-center">
+        <div class="col-lg-8">
+          <h2 class="text-center mb-4">Upload Mammogram Image</h2>
+
+          <!-- Instructions -->
+          <div class="card mb-4 shadow-sm">
+            <div class="card-body">
+              <h5 class="card-title">📋 Instructions</h5>
+              <ol>
+                <li>Select a mammogram image (JPG or PNG format)</li>
+                <li>Click "Analyze Image" to process</li>
+                <li>
+                  View prediction results with explainability visualizations
+                </li>
+                <li>Review nutrition recommendations</li>
+              </ol>
+              <p class="mb-0 text-muted">
+                <small
+                  >Maximum file size: 16MB | Supported formats: JPG, PNG</small
+                >
+              </p>
+            </div>
+          </div>
+
+          <!-- Upload Form -->
+          <div class="card shadow">
+            <div class="card-body">
+              <form id="uploadForm" enctype="multipart/form-data">
+                <!-- File Input -->
+                <div class="mb-4">
+                  <label for="imageInput" class="form-label">
+                    <strong>Select Mammogram Image</strong>
+                  </label>
+                  <input
+                    type="file"
+                    class="form-control"
+                    id="imageInput"
+                    name="image"
+                    accept="image/jpeg,image/png,image/jpg"
+                    required
+                  />
+                  <div class="invalid-feedback">
+                    Please select a valid image file.
+                  </div>
+                </div>
+
+                <!-- Image Preview -->
+                <div
+                  class="mb-4"
+                  id="imagePreviewContainer"
+                  style="display: none"
+                >
+                  <label class="form-label"
+                    ><strong>Image Preview</strong></label
+                  >
+                  <div class="text-center">
+                    <img
+                      id="imagePreview"
+                      src=""
+                      alt="Preview"
+                      class="img-fluid rounded"
+                      style="max-height: 400px"
+                    />
+                  </div>
+                </div>
+
+                <!-- Submit Button -->
+                <div class="d-grid gap-2">
+                  <button
+                    type="submit"
+                    class="btn btn-primary btn-lg"
+                    id="submitBtn"
+                  >
+                    🔍 Analyze Image
+                  </button>
+                </div>
+              </form>
+
+              <!-- Loading Indicator -->
+              <div
+                id="loadingIndicator"
+                class="text-center mt-4"
+                style="display: none"
+              >
+                <div class="spinner-border text-primary" role="status">
+                  <span class="visually-hidden">Processing...</span>
+                </div>
+                <p class="mt-2">
+                  Processing image and generating explanations...
+                </p>
+              </div>
+
+              <!-- Error Message -->
+              <div
+                id="errorMessage"
+                class="alert alert-danger mt-4"
+                style="display: none"
+                role="alert"
+              ></div>
+            </div>
+          </div>
+
+          <!-- Info Card -->
+          <div class="card mt-4 bg-light">
+            <div class="card-body">
+              <h6 class="card-title">ℹ️ What Happens Next?</h6>
+              <p class="card-text mb-0">
+                The system will analyze your mammogram using a deep learning
+                model and provide:
+              </p>
+              <ul class="mt-2 mb-0">
+                <li>Classification result (Benign/Malignant)</li>
+                <li>Confidence score</li>
+                <li>Grad-CAM heatmap showing important regions</li>
+                <li>LIME explanation highlighting decision factors</li>
+                <li>Supportive nutrition recommendations</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="bg-dark text-white py-4 mt-5">
+      <div class="container text-center">
+        <p class="mb-0">
+          &copy; 2026 Explainable AI Breast Cancer Detection System | Academic
+          Research Project
+        </p>
+      </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+      // Image preview functionality
+      document
+        .getElementById("imageInput")
+        .addEventListener("change", function (e) {
+          const file = e.target.files[0];
+          if (file) {
+            const reader = new FileReader();
+            reader.onload = function (e) {
+              document.getElementById("imagePreview").src = e.target.result;
+              document.getElementById("imagePreviewContainer").style.display =
+                "block";
+            };
+            reader.readAsDataURL(file);
+          }
+        });
+
+      // Form submission
+      document
+        .getElementById("uploadForm")
+        .addEventListener("submit", async function (e) {
+          e.preventDefault();
+
+          const fileInput = document.getElementById("imageInput");
+          const file = fileInput.files[0];
+
+          if (!file) {
+            showError("Please select an image file.");
+            return;
+          }
+
+          // Validate file type
+          const validTypes = ["image/jpeg", "image/jpg", "image/png"];
+          if (!validTypes.includes(file.type)) {
+            showError("Invalid file format. Please upload JPG or PNG image.");
+            return;
+          }
+
+          // Show loading indicator
+          document.getElementById("loadingIndicator").style.display = "block";
+          document.getElementById("errorMessage").style.display = "none";
+          document.getElementById("submitBtn").disabled = true;
+
+          // Create form data
+          const formData = new FormData();
+          formData.append("image", file);
+
+          try {
+            // Submit to server
+            const response = await fetch("/predict", {
+              method: "POST",
+              body: formData,
+            });
+
+            if (response.ok) {
+              // Redirect to result page (response is HTML)
+              const html = await response.text();
+              document.open();
+              document.write(html);
+              document.close();
+            } else {
+              const error = await response.json();
+              showError(error.error || "An error occurred during processing.");
+            }
+          } catch (error) {
+            showError(
+              "Network error. Please check your connection and try again.",
+            );
+          } finally {
+            document.getElementById("loadingIndicator").style.display = "none";
+            document.getElementById("submitBtn").disabled = false;
+          }
+        });
+
+      function showError(message) {
+        const errorDiv = document.getElementById("errorMessage");
+        errorDiv.textContent = message;
+        errorDiv.style.display = "block";
+      }
+    </script>
+  </body>
+</html>

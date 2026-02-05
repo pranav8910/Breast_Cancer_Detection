@@ -1,0 +1,269 @@
+Below is a complete, academically clean, viva-ready implementation of your Explainable AI–Based Breast Cancer Detection System, strictly following all constraints you mentioned.
+
+No database
+No cloud
+No file saving (100% in-memory processing)
+Simple, modular, well-commented
+Uses Grad-CAM + LIME
+Ready for local execution & evaluation
+
+📌 Project Title
+
+Explainable AI–Based Breast Cancer Detection System
+
+🧠 System Overview (for Viva)
+
+This web application:
+
+Accepts a mammogram image
+
+Predicts Benign / Malignant using a CNN
+
+Explains predictions using:
+
+Grad-CAM (visual heatmap)
+
+LIME (local feature importance)
+
+Displays dietary recommendations (non-medical)
+
+Processes everything in memory
+
+📁 Final Project Structure
+project/
+│── app.py
+│── model.py
+│── explainability.py
+│── requirements.txt
+│── model/
+│   └── breast_cancer_model.h5
+│── templates/
+│   ├── index.html
+│   ├── upload.html
+│   ├── result.html
+│── static/
+│   └── css/
+│       └── style.css
+
+🧪 requirements.txt
+flask
+tensorflow
+numpy
+opencv-python
+pillow
+lime
+scikit-image
+matplotlib
+
+🧠 model.py
+
+(Loads model + predicts in memory)
+
+import tensorflow as tf
+import numpy as np
+from PIL import Image
+import io
+
+MODEL_PATH = "model/breast_cancer_model.h5"
+
+model = tf.keras.models.load_model(MODEL_PATH)
+
+def preprocess_image(image_bytes):
+    image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+    image = image.resize((224, 224))
+    image = np.array(image) / 255.0
+    image = np.expand_dims(image, axis=0)
+    return image
+
+def predict(image_array):
+    preds = model.predict(image_array)
+    confidence = float(preds[0][0])
+
+    if confidence > 0.5:
+        return "Malignant", confidence
+    else:
+        return "Benign", 1 - confidence
+
+🔍 explainability.py
+
+(Grad-CAM + LIME fully in memory)
+
+import numpy as np
+import cv2
+import tensorflow as tf
+from lime import lime_image
+from skimage.segmentation import mark_boundaries
+import matplotlib.pyplot as plt
+import io
+import base64
+
+def generate_gradcam(model, image_array, layer_name="conv5_block3_out"):
+    grad_model = tf.keras.models.Model(
+        [model.inputs],
+        [model.get_layer(layer_name).output, model.output]
+    )
+
+    with tf.GradientTape() as tape:
+        conv_outputs, predictions = grad_model(image_array)
+        loss = predictions[:, 0]
+
+    grads = tape.gradient(loss, conv_outputs)
+    pooled_grads = tf.reduce_mean(grads, axis=(0, 1, 2))
+    heatmap = tf.reduce_sum(tf.multiply(pooled_grads, conv_outputs), axis=-1)
+    heatmap = np.maximum(heatmap[0], 0)
+    heatmap /= np.max(heatmap)
+
+    heatmap = cv2.resize(heatmap, (224, 224))
+    heatmap = np.uint8(255 * heatmap)
+    heatmap = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
+
+    original = np.uint8(image_array[0] * 255)
+    combined = cv2.addWeighted(original, 0.6, heatmap, 0.4, 0)
+
+    _, buffer = cv2.imencode(".png", combined)
+    return base64.b64encode(buffer).decode()
+
+def generate_lime(model, image_array):
+    explainer = lime_image.LimeImageExplainer()
+
+    explanation = explainer.explain_instance(
+        image_array[0],
+        model.predict,
+        top_labels=1,
+        hide_color=0,
+        num_samples=1000
+    )
+
+    temp, mask = explanation.get_image_and_mask(
+        explanation.top_labels[0],
+        positive_only=True,
+        hide_rest=False
+    )
+
+    lime_image_result = mark_boundaries(temp / 255.0, mask)
+
+    plt.figure(figsize=(4, 4))
+    plt.imshow(lime_image_result)
+    plt.axis('off')
+
+    buf = io.BytesIO()
+    plt.savefig(buf, format="png", bbox_inches='tight')
+    plt.close()
+
+    return base64.b64encode(buf.getvalue()).decode()
+
+🌐 app.py
+
+(Main Flask Application)
+
+from flask import Flask, render_template, request
+from model import preprocess_image, predict, model
+from explainability import generate_gradcam, generate_lime
+
+app = Flask(__name__)
+
+@app.route("/")
+def home():
+    return render_template("index.html")
+
+@app.route("/upload")
+def upload():
+    return render_template("upload.html")
+
+@app.route("/result", methods=["POST"])
+def result():
+    if "image" not in request.files:
+        return "No image uploaded", 400
+
+    file = request.files["image"]
+    if file.filename == "":
+        return "Invalid image", 400
+
+    try:
+        image_bytes = file.read()
+        image_array = preprocess_image(image_bytes)
+        prediction, confidence = predict(image_array)
+
+        gradcam = generate_gradcam(model, image_array)
+        lime_img = generate_lime(model, image_array)
+
+        diet = (
+            "Consume antioxidant-rich fruits, leafy greens, whole grains."
+            if prediction == "Benign"
+            else
+            "Focus on fiber-rich foods, vegetables, and healthy fats."
+        )
+
+        return render_template(
+            "result.html",
+            prediction=prediction,
+            confidence=round(confidence * 100, 2),
+            gradcam=gradcam,
+            lime=lime_img,
+            diet=diet
+        )
+
+    except Exception as e:
+        return f"Prediction error: {str(e)}", 500
+
+if __name__ == "__main__":
+    app.run(debug=True)
+
+🎨 HTML Templates
+templates/index.html
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Breast Cancer Detection</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+<h2>Explainable AI–Based Breast Cancer Detection</h2>
+<p>This academic project detects breast cancer from mammogram images using deep learning and explainable AI.</p>
+<a href="/upload">Start Detection</a>
+</body>
+</html>
+
+templates/upload.html
+<!DOCTYPE html>
+<html>
+<body>
+<h3>Upload Mammogram Image</h3>
+<form action="/result" method="post" enctype="multipart/form-data">
+  <input type="file" name="image" accept="image/*" required>
+  <button type="submit">Analyze</button>
+</form>
+</body>
+</html>
+
+templates/result.html
+<!DOCTYPE html>
+<html>
+<body>
+<h2>Prediction Result</h2>
+
+<p><strong>Prediction:</strong> {{ prediction }}</p>
+<p><strong>Confidence:</strong> {{ confidence }}%</p>
+
+<h3>Grad-CAM Explanation</h3>
+<img src="data:image/png;base64,{{ gradcam }}">
+
+<h3>LIME Explanation</h3>
+<img src="data:image/png;base64,{{ lime }}">
+
+<h3>Nutrition & Diet Recommendation</h3>
+<p>{{ diet }}</p>
+
+<p><em>Note: This is informational only, not medical advice.</em></p>
+</body>
+</html>
+
+🎨 static/css/style.css
+body {
+    font-family: Arial;
+    margin: 40px;
+}
+img {
+    width: 300px;
+    border: 1px solid #ccc;
+}
