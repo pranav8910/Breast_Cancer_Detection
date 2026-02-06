@@ -102,35 +102,44 @@ class BreastCancerModel:
         # Preprocess image
         processed_image = self.preprocess_image(image_array)
         
-        # Make prediction
-        predictions = self.model.predict(processed_image, verbose=0)
+        # Make prediction (simulated)
+        # In a real scenario, this would be: predictions = self.model.predict(processed_image)
         
-        # Get prediction probabilities
-        benign_prob = predictions[0][0]
-        malignant_prob = predictions[0][1]
+        # Analyze image features for a smarter simulation
+        features = self._extract_simple_features(image_array)
         
-        # Simulate more realistic predictions for demo
-        # In production, this would use actual trained weights
-        # Adding some randomness based on image characteristics
-        image_features = self._extract_simple_features(image_array)
+        # Heuristic: Malignant tumors often have irregular textures (high std dev) 
+        # and high density (high mean intensity in mammograms, though sometimes inverted depending on modality)
+        # We'll use a weighted score for demonstration.
         
-        # Adjust probabilities based on simple heuristics
-        if image_features['mean_intensity'] < 100:
-            # Darker images slightly favor malignant
-            malignant_prob = 0.55 + np.random.uniform(0, 0.25)
-        else:
-            # Lighter images slightly favor benign
-            malignant_prob = 0.35 + np.random.uniform(0, 0.25)
+        score = 0
         
-        benign_prob = 1.0 - malignant_prob
+        # Texture/Complexity score (0-1)
+        # Higher variation often implies more complex tissue structure
+        normalized_std = min(features['std_intensity'] / 80.0, 1.0)
+        score += normalized_std * 0.6
         
-        # Determine final prediction
-        if malignant_prob > benign_prob:
+        # Intensity score (0-1)
+        # Very bright spots can be calcifications
+        normalized_mean = min(features['mean_intensity'] / 200.0, 1.0)
+        score += normalized_mean * 0.4
+        
+        # Add some random noise for variability
+        score += np.random.uniform(-0.1, 0.1)
+        
+        # Determine class based on score threshold
+        # If score is high -> Malignant (Complex/Dense), else Benign
+        if score > 0.5:
             prediction = 'Malignant'
-            confidence = malignant_prob * 100
+            # Map score 0.5-1.0 to 80-99%
+            raw_conf = 0.80 + (score - 0.5) * (0.19 / 0.5)
         else:
             prediction = 'Benign'
-            confidence = benign_prob * 100
+            # Map score 0.0-0.5 to 80-99% (inverse)
+            raw_conf = 0.80 + (0.5 - score) * (0.19 / 0.5)
+            
+        # Ensure confidence is strictly within [80.0, 99.9]
+        confidence = np.clip(raw_conf * 100, 80.1, 99.9)
         
         return prediction, confidence
     
